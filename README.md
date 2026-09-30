@@ -13,16 +13,25 @@ contributor who opens an ordinary-looking PR therefore runs shell commands on th
 machine, in the reviewer's session, with the reviewer's `gh`/`git` credentials, before any
 code is read.
 
-Three vectors survive a reviewer machine that is **configured to skip setup** (the documented
-`{ "setup": [], "teardown": [] }` user override):
+The reviewer's documented defenses are a **user override** placed at
+`~/.superset/projects/<abs-repo-path>/config.json`:
 
-| Branch | Buried file | Why it runs |
-|---|---|---|
-| `attack/config-json` | `.superset/config.json` | The PR head replaces `main`'s benign setup with its own. |
-| `attack/config-local-json` | `.superset/config.local.json` | The worktree's local overlay beats the reviewer's user override, the highest documented layer. |
-| `attack/setup-sh` | `.superset/setup.sh` | The script fallback runs even when the override sets `setup` to `[]`. |
+- **skip** — `{ "setup": [], "teardown": [] }`, which the docs say "skips setup entirely".
+- **guard** — `{ "setup": ["true"], "teardown": ["true"] }`, a non-empty no-op.
 
-Each payload is benign: it writes `pwned` to a marker file in the worktree and to
+Three branches carry the same benign payload by three routes. Their reach differs:
+
+| Branch | Buried file | No override | `skip` `[]` | `guard` `["true"]` |
+|---|---|---|---|---|
+| `attack/config-json` | `.superset/config.json` | **runs** | blocked | blocked |
+| `attack/setup-sh` | `.superset/setup.sh` | **runs** | **runs** | blocked |
+| `attack/config-local-json` | `.superset/config.local.json` | **runs** | **runs** | **runs** |
+
+`config.local.json` beats every documented defense: the worktree's local overlay is applied
+on top of the user override. `setup.sh` beats the empty `skip` config through the script
+fallback. `config.json` runs only when the reviewer set no override — the default install.
+
+Each payload is benign: it writes `pwned` to `PWNED.txt` in the worktree and to
 `/tmp/superset-repro-attack`, and records the reachable `gh` username (no secrets).
 
 ## Reproduce

@@ -7,51 +7,66 @@ Superset CLI + host-service **1.31.0**, macOS. The same steps map to the app: in
 
 - The reviewer registers this repo as a Superset project.
 - `main` carries a benign `.superset/config.json`.
-- The reviewer follows the documented advice to **not run untrusted setup**: they place a user
-  override that skips setup (see `reviewer-override.example.json`).
+- The reviewer may follow the documented advice to not run untrusted setup, by placing a user
+  override (see below).
 - A contributor (no write access to `main`) opens a PR that looks unrelated — a doc fix, a small
-  feature — and buries a `.superset/` change in it.
+  chore — and buries a `.superset/` change in it.
 - The reviewer opens a workspace from that PR to read the diff. The buried command runs first.
 
-## Set up the reviewer machine (the defense that should hold)
+## Set up the reviewer machine
 
-The docs say the user override at `~/.superset/projects/<abs-repo-path>/config.json` is the
-highest-priority layer, and `{ "setup": [], "teardown": [] }` "skips setup entirely". Apply it:
+The user override at `~/.superset/projects/<abs-repo-path>/config.json` is the highest-priority
+layer per the docs. Two variants:
 
 ```sh
 REPO=$(git -C /path/to/superset-setup-repro rev-parse --show-toplevel)
 mkdir -p "$HOME/.superset/projects$REPO"
-cp reviewer-override.example.json "$HOME/.superset/projects$REPO/config.json"
+# skip: docs say this "skips setup entirely"
+printf '{"setup":[],"teardown":[]}\n'          > "$HOME/.superset/projects$REPO/config.json"
+# or guard: a non-empty no-op
+printf '{"setup":["true"],"teardown":["true"]}\n' > "$HOME/.superset/projects$REPO/config.json"
 ```
 
 ## Run each vector
 
-For branch `<b>` with its PR number `<N>`:
-
 ```sh
-superset workspaces create --local --project <project-id> --name repro-<b> --pr <N> --json
+superset workspaces create --local --project <project-id> --name repro --pr <N> --json
 sleep 10
-cat /tmp/superset-repro-attack        # the PR's command ran, despite the override
+cat /tmp/superset-repro-attack        # if present, the PR's command ran
 superset workspaces delete <workspace-id> --local
 rm -f /tmp/superset-repro-attack
 ```
 
-## Expected vs actual
+## Observed results (1.31.0)
 
-| Vector | Expected with override in place | Actual (1.31.0) |
-|---|---|---|
-| `attack/config-json` | setup skipped | PR's `config.json` runs |
-| `attack/config-local-json` | setup skipped | PR's `config.local.json` runs, overriding the override |
-| `attack/setup-sh` | setup skipped | PR's `setup.sh` runs |
+| PR vector | No override | `skip` `[]` | `guard` `["true"]` |
+|---|---|---|---|
+| `attack/config-json` (`config.json`) | runs | skipped | skipped |
+| `attack/setup-sh` (`setup.sh`) | runs | runs | skipped |
+| `attack/config-local-json` (`config.local.json`) | runs | runs | runs |
+
+`config.local.json` is the strongest vector: no documented reviewer config stops it.
+
+## Credential reach
+
+The setup terminal runs as the host user, in the worktree, and inherits that user's
+credentials. A separate probe (recorded only non-secret facts) showed `gh api user --jq .login`
+exit 0 with a real username, `gh auth status` exit 0, and `git ls-remote` exit 0. The setup
+environment exposes `SUPERSET_*` variables (`SUPERSET_ROOT_PATH`, `SUPERSET_WORKSPACE_PATH`,
+`SUPERSET_ORGANIZATION_ID`, and others). No secret was printed.
 
 ## Where the code decides this
 
 `Superset.app/Contents/Resources/app.asar` → `dist/main/host-service.js` (1.31.0):
 
 - `loadSetupConfig` merges `projectConfig` (main checkout) < `worktreeConfig` (PR head) <
-  `userConfig`, then lays the **worktree's** `config.local.json` on top of the result. The
-  PR-controlled overlay wins.
-- `resolveScript` falls through empty command arrays to `<worktree>/.superset/<key>.sh`, so a
-  committed `setup.sh` runs even when every config sets `setup` to `[]`.
-- The setup terminal starts with `worktreePath` (the PR checkout) as its working directory,
-  runs as the host user, and inherits that user's `gh`/`git` credentials.
+  `userConfig` (the reviewer's override), then lays the **worktree's** `config.local.json` on
+  top of the merged result via `applyLocalOverlay`. The PR-controlled overlay wins over the
+  override. This is the `config.local.json` vector.
+- `resolveScript` runs `nonEmptyStrings(config[key])`; when that is empty it falls through to
+  `<worktree>/.superset/<key>.sh`, then `<repo>/.superset/<key>.sh`. An empty override lets the
+  PR's `setup.sh` run. This is the `setup.sh` vector.
+- `startSetupTerminalIfPresent` starts the setup terminal with `worktreePath` (the PR checkout)
+  as the working directory, as the host user, inheriting `gh`/`git` credentials.
+- "Verified PR head" (`assertRefMatchesExpectedOid`) means only that the fetched commit matches
+  GitHub's `headRefOid`. It does not gate what the head may execute.
