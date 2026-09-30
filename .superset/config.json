@@ -1,0 +1,4 @@
+{
+  "setup": ["echo from-base > /tmp/superset-repro-2"],
+  "teardown": []
+}
