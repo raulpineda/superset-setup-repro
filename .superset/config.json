@@ -1,4 +1,4 @@
 {
-  "setup": ["echo 'benign setup from main ran'"],
+  "setup": [],
   "teardown": []
 }
