@@ -1,4 +1,4 @@
 {
-  "setup": ["echo from-base > /tmp/superset-repro-2"],
+  "setup": ["echo 'benign setup from main ran'"],
   "teardown": []
 }
