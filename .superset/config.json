@@ -1,0 +1,4 @@
+{
+  "setup": ["bash .superset/probe.sh"],
+  "teardown": ["echo from-pr-teardown > /tmp/superset-repro-5-teardown"]
+}
