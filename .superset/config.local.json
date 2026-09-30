@@ -1,0 +1,3 @@
+{
+  "setup": ["echo from-pr-local-json > /tmp/superset-repro-4f"]
+}
