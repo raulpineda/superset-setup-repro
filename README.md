@@ -2,7 +2,8 @@
 
 Security reproduction for **Superset project lifecycle scripts** (`.superset/config.json`).
 
-Tested on Superset CLI + host-service **1.31.0** (macOS).
+Tested on Superset CLI + host-service **1.31.0 and 1.32.0** (macOS). The result matrix below
+is identical on both versions.
 
 ## What this shows
 
